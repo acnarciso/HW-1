@@ -1,6 +1,6 @@
 ---
 title: "MATH 216 Homework 1"
-author: "WRITE YOUR NAME HERE"
+author: "Andrea Narciso"
 output:
   html_document:
     toc: true
@@ -9,11 +9,12 @@ output:
     smooth_scroll: false
 ---
 
-```{r, echo=FALSE, message=FALSE, cache=TRUE}
+```{r, echo=FALSE, message=FALSE}
 library(ggplot2)
 library(dplyr)
 # For read_csv() command, which is an improved version of base R's read.csv()
 library(readr) 
+library(lubridate)
 
 # Load data sets. Note this assumes this .Rmd files is in the same directory as
 # the .csv files.
@@ -34,10 +35,12 @@ states <- read_csv("data/states.csv")
 
 Please indicate
 
-* Who you collaborated with:
-* Roughly how much time you spent on this HW so far:
+ADD!!!!!!!?????!!!!!
+
+* Who you collaborated with: None
+* Roughly how much time you spent on this HW so far: 6 hours
 * The URL of the RPubs published URL [here](https://www.nhl.com/).
-* What gave you the most trouble:
+* What gave you the most trouble: Trying to figure out what combination of commands to use and how to solve an ambiguous problem.
 * Any comments you have:
 
 
@@ -57,6 +60,35 @@ minutes tend to occur.
 
 ```{r, echo=FALSE, message=FALSE, fig.width=12, fig.height=6}
 
+# Calculates the total number of flights per day (denom)
+flights_per_day <- flights %>% 
+  group_by(date) %>% 
+  tally() %>% 
+  rename(num_flights_daily = n)
+# flights_per_day
+
+# Number of flights per day delayed for over 30 mins
+delay_gt_30 <- flights %>% 
+  filter(arr_delay > 30) %>% 
+  group_by(date) %>%
+  tally() %>% 
+  rename(num_delayed_daily = n)
+# delay_gt_30
+
+# Calculates proportion of flights delayed >30 mins per day
+prop_delay <- inner_join(flights_per_day, delay_gt_30, by="date") %>% 
+  mutate(prop = round(num_delayed_daily/num_flights_daily, 2))
+# prop_delay
+
+# Graphs date vs prop
+date_v_prop_plot <- ggplot(data=prop_delay, aes(x=date, y=prop)) + 
+  geom_point() + 
+  geom_smooth(se=FALSE) + 
+  labs(x="Date",
+     y="Proportion of Flights Delayed > 30 Minutes",
+     title="Proportion of Flights Delayed by Date")
+date_v_prop_plot
+
 ```
 
 
@@ -70,24 +102,136 @@ they tend to have more room.  Which airlines should these people favor?
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
 
+# Carriers and Plane Models
+carrier_model <- flights %>% 
+  select(plane, carrier)
+
+# Year and Plane Models
+year_model <- planes %>% 
+  select(plane, year)
+
+# Carrier, Year, and Plane Models
+carrier_year <- inner_join(carrier_model, year_model, by="plane") %>% 
+  filter(!(is.na(year))) %>% 
+  group_by(year, carrier) %>% 
+  tally() %>% 
+  rename(num_planes = n, year_produced=year) %>% 
+  mutate(carrier = as.factor(carrier))
+
+# Number of planes produced before the year 2000, by airline
+pre_2000 <- carrier_year %>% 
+  filter(year_produced < 2000) %>% 
+  group_by(carrier) %>% 
+  summarise(total_planes_pre_2000 = sum(num_planes))
+
+# Total number of planes produced, by airline
+total_planes <- carrier_year %>% 
+  group_by(carrier) %>% 
+  summarise(total_planes = sum(num_planes))
+
+# Airlines with a greater than 0.75 proportion of planes built before 2000 
+# which preumably have larger seats
+# Sorted from highest to lowest
+
+prop_planes_pre_2000 <- inner_join(pre_2000, total_planes, by="carrier") %>% 
+  mutate(prop_pre_2000 = round(total_planes_pre_2000/total_planes, 2)) %>% 
+  select(carrier, prop_pre_2000) %>%
+  arrange(desc(prop_pre_2000)) %>% 
+  head (n=4) %>% 
+  rename(Carrier = carrier, 
+         "Proportion of Planes Built Before 2000" = prop_pre_2000)
+prop_planes_pre_2000
+
+#NOTE: have to arrange THEN get the head to get top results 
+
 ```
 
-
+I defined "older" planes as any plane built before the year 2000, and assumed that these planes are more likely to have larger seats. People that prefer a larger seat should book with one of the carriers listed in the table above, as it shows the top 5 carriers with the largest proportion of planes built before 2000, and thus, the larger seats. All of these carriers have more than 75% of their planes built in this time period, which creates a higher chance that an individual is going to get a wider seat, given that he or she booked with a specific carrier. 
 
 
 
 ## Question 3:
 
-* What states did Southwest Airlines' **flight paths** tend to fly to?
-* What states did Southwest Airlines' **flights** tend to fly to?
+* What states did Southwest Airlines' (WN) **flight paths** (y/n) tend to fly to?
+* What states did Southwest Airlines' **flights** (number of existing flights) tend to fly to?
 
 For example, Southwest Airlines Flight 60 to Dallas consists of a single flight
 path, but since it flew 299 times in 2013, it would be counted as 299 flights.
 
 ```{r, echo=FALSE, message=FALSE, fig.width=12, fig.height=6}
 
+# NOTE: flight paths = highest number of distinct flights to locations w/in a state
+#       thus, number of there-and-back,  ==doesn't matter
+# NOTE: flights = highest number of total flights to the different lications w/in a state
+
+# Combines the flights and airports data
+# adding the information of the airport to each flight
+
+flights_airports <- left_join(flights, airports, by=c("dest"="iata"))
+# flights_airports
+
+# Adds the region information to each flight
+
+flights_airports_region <- left_join(flights_airports_july, states, by="state")
+# flights_airports_region
+
+# Narrows down the flights data to only southwest flights,
+# Changes the destination to type="factor", and removes irrelevant data
+
+southwest_flights <- flights_airports %>% 
+  filter(carrier == "WN", !(is.na(state))) %>% 
+  select(date, carrier, flight, dest, airport, state) %>% 
+  mutate(dest = as.factor(dest))
+southwest_flights
+
+# 1. FLIGHT PATHS 
+
+# Tallied the number of distinct flights, destinations and states
+SW_flight_paths <- southwest_flights %>% 
+  group_by(state, dest, flight) %>% 
+  tally() %>% 
+  rename(num_flights = n)
+# SW_flight_paths
+
+# Tallied the number of distinct flights and destinations by state
+SW_flight_paths_by_state <- SW_flight_paths %>% 
+  group_by(state) %>% 
+  tally() %>% 
+  arrange(desc(n)) %>% 
+  head(n = 5) %>% 
+  rename("Number of Flight Paths" = n) 
+SW_flight_paths_by_state
+
+# SW_flight_paths_by_state <- southwest_flights %>% 
+#   group_by(state, dest) %>% 
+#   tally() %>% 
+#   rename(num_flight_paths = n)
+# SW_flight_paths_by_state
+
+#NOTE: group_by() THEN tally()
+
+
+# 2. FLIGHTS
+
+# Counts the number of flights per state
+# and sorts the states in increasing order
+
+SW_flights_by_state <- southwest_flights  %>% 
+  count(state) %>% 
+  rename(num_flights = n) %>% 
+  arrange(desc(num_flights)) %>% 
+  head(n = 5) 
+SW_flights_by_state
+
+# NOTE: sort using arrange(), not sort
+# NOTE: use head(n= num_rows) to get TOP 5/10
+# NOTE: count() does both group_by() and tally()
+
 ```
 
+The first table provides the top 5 states that Southwest Airlines' flight paths tend to fly to. In the original data, one flight number had multiple destinations, which can be attributed to the existence of connecting flights. Consumers are able to take individual flights within a longer, connecting flight; thus, these consumers would likely consider this flight as a "flight path" of the carrier. Therefore, I treated each flight within a connecting flight as a distinct flight path. 
+
+The second table provides the top 5 states that Southwest Airlines' flights tend to fly to. 
 
 
 
@@ -95,9 +239,48 @@ path, but since it flew 299 times in 2013, it would be counted as 299 flights.
 ## Question 4:
 
 I want to know proportionately what regions (NE, south, west, midwest) each 
-carrier flies to/from Houston in the month of July.  Consider the `month()`
+carrier flies to, from Houston in the month of July.  Consider the `month()`
 function from the `lubridate` package.
 
 ```{r, echo=FALSE, message=FALSE, fig.width=12, fig.height=6}
 
+# Condenses information from flights and airports data tables into 1 table
+# containing date, carrier, flight, plane, dest, airport, city, state
+# and filters to only contain flights in the month of July
+
+flights_airports_july <- left_join(flights, airports, by=c("dest"="iata")) %>% 
+  mutate(month = month(ymd(date))) %>% 
+  filter(month == 7) %>% 
+  select(date, carrier, dest, airport, city, state)
+
+#Adds the region information to the destination location of each flight
+
+flights_region_july <- left_join(flights_airports_july, states, by="state") %>% 
+  filter(!(is.na(region)))
+# flights_region_july
+
+# Tallies the total number of flights
+flights_july_total <- flights_region_july %>% 
+  group_by(region) %>% 
+  summarise(total_num_flights = sum(n))
+# flights_july_total
+# PRODUCES AN OVERLY HIGH NUMBER????
+
+# Tallies the total number of flights by region
+flights_region_july_tally <- flights_region_july %>% 
+  group_by(region) %>% 
+  tally() %>% 
+  rename(num_flights_per_region = n)
+# flights_region_july_tally
+
+# Finds the proportion of flights per region
+flights_region_july_prop <- inner_join(flights_region_july_tally, 
+                                       flights_july_total, by="region") %>% 
+  mutate(prop = round(num_flights_per_region/total_num_flights, 2)) %>% 
+  select(region, prop) %>% 
+  rename("Proportion of Flights" = prop) 
+flights_region_july_prop
+
 ```
+The data table above shows the proportion of flights going to each region from the IAH airport in Houston. 
+
