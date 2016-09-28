@@ -35,12 +35,11 @@ states <- read_csv("data/states.csv")
 
 Please indicate
 
-ADD!!!!!!!?????!!!!!
 
 * Who you collaborated with: None
-* Roughly how much time you spent on this HW so far: 6 hours
-* The URL of the RPubs published URL [here](https://www.nhl.com/).
-* What gave you the most trouble: Trying to figure out what combination of commands to use and how to solve an ambiguous problem.
+* Roughly how much time you spent on this HW so far: 6.5 hours
+* The URL of the RPubs published URL [here](http://rpubs.com/anarciso/HW-1).
+* What gave you the most trouble: Trying to figure out what combination of commands to use and how to solve an ambiguous problem. Trying to solve the errors produced when knitting the file. 
 * Any comments you have:
 
 
@@ -172,7 +171,7 @@ flights_airports <- left_join(flights, airports, by=c("dest"="iata"))
 
 # Adds the region information to each flight
 
-flights_airports_region <- left_join(flights_airports_july, states, by="state")
+flights_airports_region <- left_join(flights_airports, states, by="state")
 # flights_airports_region
 
 # Narrows down the flights data to only southwest flights,
@@ -182,7 +181,7 @@ southwest_flights <- flights_airports %>%
   filter(carrier == "WN", !(is.na(state))) %>% 
   select(date, carrier, flight, dest, airport, state) %>% 
   mutate(dest = as.factor(dest))
-southwest_flights
+# southwest_flights
 
 # 1. FLIGHT PATHS 
 
@@ -201,12 +200,6 @@ SW_flight_paths_by_state <- SW_flight_paths %>%
   head(n = 5) %>% 
   rename("Number of Flight Paths" = n) 
 SW_flight_paths_by_state
-
-# SW_flight_paths_by_state <- southwest_flights %>% 
-#   group_by(state, dest) %>% 
-#   tally() %>% 
-#   rename(num_flight_paths = n)
-# SW_flight_paths_by_state
 
 #NOTE: group_by() THEN tally()
 
@@ -249,9 +242,10 @@ function from the `lubridate` package.
 # and filters to only contain flights in the month of July
 
 flights_airports_july <- left_join(flights, airports, by=c("dest"="iata")) %>% 
-  mutate(month = month(ymd(date))) %>% 
-  filter(month == 7) %>% 
+  # mutate(month = ) %>% 
+  filter(month(ymd(date)) == 7) %>% 
   select(date, carrier, dest, airport, city, state)
+# flights_airports_july
 
 #Adds the region information to the destination location of each flight
 
@@ -259,24 +253,12 @@ flights_region_july <- left_join(flights_airports_july, states, by="state") %>%
   filter(!(is.na(region)))
 # flights_region_july
 
-# Tallies the total number of flights
-flights_july_total <- flights_region_july %>% 
-  group_by(region) %>% 
-  summarise(total_num_flights = sum(n))
-# flights_july_total
-# PRODUCES AN OVERLY HIGH NUMBER????
-
-# Tallies the total number of flights by region
-flights_region_july_tally <- flights_region_july %>% 
+# Finds the proportion of flights per region
+flights_region_july_prop <- flights_region_july %>% 
   group_by(region) %>% 
   tally() %>% 
-  rename(num_flights_per_region = n)
-# flights_region_july_tally
-
-# Finds the proportion of flights per region
-flights_region_july_prop <- inner_join(flights_region_july_tally, 
-                                       flights_july_total, by="region") %>% 
-  mutate(prop = round(num_flights_per_region/total_num_flights, 2)) %>% 
+  mutate(total = sum(n)) %>% 
+  mutate(prop = round(n/total, 2)) %>% 
   select(region, prop) %>% 
   rename("Proportion of Flights" = prop) 
 flights_region_july_prop
