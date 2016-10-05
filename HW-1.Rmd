@@ -25,6 +25,10 @@ weather <- read_csv("data/weather.csv") %>%
 planes <- read_csv("data/planes.csv")
 airports <- read_csv("data/airports.csv")
 states <- read_csv("data/states.csv")
+
+# NOTE: THIS WILL PUT THE OUTPUT SHOW UP IN THE RMARKDOWN DOC VS CONSOLE
+# Tools > global options > R Markdown < check "show output line for all Rmarkdown docs"
+# can also select "show output preview in... <check dropdown>" 
 ```
 
 
@@ -37,7 +41,7 @@ Please indicate
 
 
 * Who you collaborated with: None
-* Roughly how much time you spent on this HW so far: 6.5 hours
+* Roughly how much time you spent on this HW so far: 8 hours
 * The URL of the RPubs published URL [here](http://rpubs.com/anarciso/HW-1).
 * What gave you the most trouble: Trying to figure out what combination of commands to use and how to solve an ambiguous problem. Trying to solve the errors produced when knitting the file. 
 * Any comments you have:
@@ -59,25 +63,34 @@ minutes tend to occur.
 
 ```{r, echo=FALSE, message=FALSE, fig.width=12, fig.height=6}
 
-# Calculates the total number of flights per day (denom)
-flights_per_day <- flights %>% 
+# # Calculates the total number of flights per day (denom)
+# flights_per_day <- flights %>% 
+#   group_by(date) %>% 
+#   tally() %>% 
+#   rename(num_flights_daily = n)
+# # flights_per_day
+# 
+# # Number of flights per day delayed for over 30 mins
+# delay_gt_30 <- flights %>% 
+#   filter(arr_delay > 30) %>% 
+#   group_by(date) %>%
+#   tally() %>% 
+#   rename(num_delayed_daily = n)
+# # delay_gt_30
+# 
+# # Calculates proportion of flights delayed >30 mins per day
+# prop_delay <- inner_join(flights_per_day, delay_gt_30, by="date") %>% 
+#   mutate(prop = round(num_delayed_daily/num_flights_daily, 2))
+# # prop_delay
+
+# Calculates proportion of flights delayed >30 mins per day (CONDENSED)
+prop_delay <- flights %>% 
+  filter(!is.na(dep_delay)) %>% 
+  mutate(over30 = ifelse(dep_delay>30, TRUE, FALSE)) %>% 
   group_by(date) %>% 
-  tally() %>% 
-  rename(num_flights_daily = n)
-# flights_per_day
+  summarise(prop=mean(over30))
+# NOTE: THIS USES AN IFELSE STATEMENT THAT DRAMATICALLY SHORTENS THE CODE
 
-# Number of flights per day delayed for over 30 mins
-delay_gt_30 <- flights %>% 
-  filter(arr_delay > 30) %>% 
-  group_by(date) %>%
-  tally() %>% 
-  rename(num_delayed_daily = n)
-# delay_gt_30
-
-# Calculates proportion of flights delayed >30 mins per day
-prop_delay <- inner_join(flights_per_day, delay_gt_30, by="date") %>% 
-  mutate(prop = round(num_delayed_daily/num_flights_daily, 2))
-# prop_delay
 
 # Graphs date vs prop
 date_v_prop_plot <- ggplot(data=prop_delay, aes(x=date, y=prop)) + 
@@ -90,7 +103,7 @@ date_v_prop_plot
 
 ```
 
-
+The graph above represents a time series of the proportion of flights delayed for more than 30 minutes in the year 2011. It shows that the highest proportion of flights are delayed in the summer, from May to August.
 
 
 
@@ -104,49 +117,41 @@ they tend to have more room.  Which airlines should these people favor?
 # Carriers and Plane Models
 carrier_model <- flights %>% 
   select(plane, carrier)
+# carrier_model
 
 # Year and Plane Models
 year_model <- planes %>% 
   select(plane, year)
+# year_model
 
-# Carrier, Year, and Plane Models
-carrier_year <- inner_join(carrier_model, year_model, by="plane") %>% 
+# Carrier and Plane Models by Decade
+carrier_decade <- inner_join(carrier_model, year_model, by="plane") %>% 
   filter(!(is.na(year))) %>% 
-  group_by(year, carrier) %>% 
+  mutate(decade_produced = floor(year/10)*10) %>% 
+  mutate(carrier = as.factor(carrier), 
+         decade_produced = as.factor(decade_produced)) %>% 
+  group_by(decade_produced, carrier) %>% 
   tally() %>% 
-  rename(num_planes = n, year_produced=year) %>% 
-  mutate(carrier = as.factor(carrier))
+  rename(num_per_decade = n) 
+# carrier_decade
 
-# Number of planes produced before the year 2000, by airline
-pre_2000 <- carrier_year %>% 
-  filter(year_produced < 2000) %>% 
-  group_by(carrier) %>% 
-  summarise(total_planes_pre_2000 = sum(num_planes))
+#Plots
+carrier_decade_plot <- ggplot(data = carrier_decade, 
+                              aes(x = carrier, y = num_per_decade, 
+                                  fill = decade_produced)) + 
+  geom_bar(stat="identity", position="stack") +
+  labs(title = "Number of Planes Produced by Decade for Each Carrier",
+       x = "Carrier", 
+       y = "Number of Planes Produced")
+carrier_decade_plot
 
-# Total number of planes produced, by airline
-total_planes <- carrier_year %>% 
-  group_by(carrier) %>% 
-  summarise(total_planes = sum(num_planes))
-
-# Airlines with a greater than 0.75 proportion of planes built before 2000 
-# which preumably have larger seats
-# Sorted from highest to lowest
-
-prop_planes_pre_2000 <- inner_join(pre_2000, total_planes, by="carrier") %>% 
-  mutate(prop_pre_2000 = round(total_planes_pre_2000/total_planes, 2)) %>% 
-  select(carrier, prop_pre_2000) %>%
-  arrange(desc(prop_pre_2000)) %>% 
-  head (n=4) %>% 
-  rename(Carrier = carrier, 
-         "Proportion of Planes Built Before 2000" = prop_pre_2000)
-prop_planes_pre_2000
-
-#NOTE: have to arrange THEN get the head to get top results 
+# what if try position = "fill"???
 
 ```
 
-I defined "older" planes as any plane built before the year 2000, and assumed that these planes are more likely to have larger seats. People that prefer a larger seat should book with one of the carriers listed in the table above, as it shows the top 5 carriers with the largest proportion of planes built before 2000, and thus, the larger seats. All of these carriers have more than 75% of their planes built in this time period, which creates a higher chance that an individual is going to get a wider seat, given that he or she booked with a specific carrier. 
+The above graph presents the number and proportion of planes produced by decade for each carrier. It shows that the major carriers--which I define as the carriers with the largest fleet-- include CO, OO, WN and XE. These major carriers predominantly own planes produced in the 1990s and the 2000s. 
 
+ANALYSIS?????
 
 
 ## Question 3:
@@ -198,7 +203,9 @@ SW_flight_paths_by_state <- SW_flight_paths %>%
   tally() %>% 
   arrange(desc(n)) %>% 
   head(n = 5) %>% 
-  rename("Number of Flight Paths" = n) 
+  rename("Number of Flight Paths" = n,
+         "State" = state) %>% 
+  knitr::kable()
 SW_flight_paths_by_state
 
 #NOTE: group_by() THEN tally()
@@ -213,7 +220,10 @@ SW_flights_by_state <- southwest_flights  %>%
   count(state) %>% 
   rename(num_flights = n) %>% 
   arrange(desc(num_flights)) %>% 
-  head(n = 5) 
+  head(n = 5) %>% 
+  rename("Number of Flights" = num_flights,
+         "State" = state) %>% 
+  knitr::kable()
 SW_flights_by_state
 
 # NOTE: sort using arrange(), not sort
@@ -255,13 +265,23 @@ flights_region_july <- left_join(flights_airports_july, states, by="state") %>%
 
 # Finds the proportion of flights per region
 flights_region_july_prop <- flights_region_july %>% 
-  group_by(region) %>% 
+  group_by(carrier, region) %>% 
   tally() %>% 
-  mutate(total = sum(n)) %>% 
-  mutate(prop = round(n/total, 2)) %>% 
+  rename(num_by_region = n) %>% 
+  group_by(carrier) %>% 
+  mutate(total = sum(num_by_region), prop = round(num_by_region/total, 2)) %>% 
   select(region, prop) %>% 
-  rename("Proportion of Flights" = prop) 
+  arrange(carrier, region) %>% 
+  rename("Proportion of Flights" = prop, "Carrier" = carrier, "Region" = region) %>%
+  knitr::kable()
 flights_region_july_prop
+
+# HOW TO USE THIS HERE????????
+# prop_delay <- flights %>% 
+#   filter(!is.na(dep_delay)) %>% 
+#   mutate(over30 = ifelse(dep_delay>30, TRUE, FALSE)) %>% 
+#   group_by(date) %>% 
+#   summarise(prop=mean(over30))
 
 ```
 The data table above shows the proportion of flights going to each region from the IAH airport in Houston. 
